@@ -1,5 +1,6 @@
 package io.github.mahditilab.gdrivemcp.tools;
 
+import com.google.api.client.http.ByteArrayContent;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
@@ -18,6 +19,7 @@ public class GoogleDriveTools {
     private static final String FIELDS = "id, name, mimeType, size, modifiedTime, webViewLink, parents";
     private static final String GOOGLE_DOC_MIME   = "application/vnd.google-apps.document";
     private static final String GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet";
+    private static final String GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation";
     private static final String FOLDER_MIME       = "application/vnd.google-apps.folder";
 
     private final Drive drive;
@@ -100,10 +102,12 @@ public class GoogleDriveTools {
             drive.files().export(fileId, "text/plain").executeMediaAndDownloadTo(out);
         } else if (GOOGLE_SHEET_MIME.equals(mimeType)) {
             drive.files().export(fileId, "text/csv").executeMediaAndDownloadTo(out);
+        } else if (GOOGLE_SLIDES_MIME.equals(mimeType)) {
+            drive.files().export(fileId, "text/plain").executeMediaAndDownloadTo(out);
         } else if (mimeType.startsWith("text/") || mimeType.equals("application/json")) {
             drive.files().get(fileId).executeMediaAndDownloadTo(out);
         } else {
-            return "Cannot read file '%s' (mimeType: %s). Only Google Docs, Sheets, and plain text files are supported."
+            return "Cannot read file '%s' (mimeType: %s). Only Google Docs, Sheets, Slides, and plain text files are supported."
                     .formatted(file.getName(), mimeType);
         }
 
@@ -178,6 +182,88 @@ public class GoogleDriveTools {
 
         return "Created folder: id=%s, name=%s, url=%s"
                 .formatted(created.getId(), created.getName(), created.getWebViewLink());
+    }
+
+    @Tool(name = "create_spreadsheet", description = """
+            Create a new empty Google Sheet (spreadsheet) in Google Drive.
+            Returns the ID, name and webViewLink of the created spreadsheet.
+            """)
+    public String createSpreadsheet(
+            @ToolParam(description = "Name of the new spreadsheet", required = true) String name,
+            @ToolParam(description = "Parent folder ID where the spreadsheet should be created. Omit for My Drive root.", required = false) String folderId
+    ) throws IOException {
+        File metadata = new File();
+        metadata.setName(name);
+        metadata.setMimeType(GOOGLE_SHEET_MIME);
+
+        if (folderId != null && !folderId.isBlank()) {
+            metadata.setParents(List.of(folderId));
+        }
+
+        File created = drive.files().create(metadata)
+                .setFields("id, name, webViewLink")
+                .execute();
+
+        return "Created spreadsheet: id=%s, name=%s, url=%s"
+                .formatted(created.getId(), created.getName(), created.getWebViewLink());
+    }
+
+    @Tool(name = "create_presentation", description = """
+            Create a new empty Google Slides presentation in Google Drive.
+            Returns the ID, name and webViewLink of the created presentation.
+            """)
+    public String createPresentation(
+            @ToolParam(description = "Name of the new presentation", required = true) String name,
+            @ToolParam(description = "Parent folder ID where the presentation should be created. Omit for My Drive root.", required = false) String folderId
+    ) throws IOException {
+        File metadata = new File();
+        metadata.setName(name);
+        metadata.setMimeType(GOOGLE_SLIDES_MIME);
+
+        if (folderId != null && !folderId.isBlank()) {
+            metadata.setParents(List.of(folderId));
+        }
+
+        File created = drive.files().create(metadata)
+                .setFields("id, name, webViewLink")
+                .execute();
+
+        return "Created presentation: id=%s, name=%s, url=%s"
+                .formatted(created.getId(), created.getName(), created.getWebViewLink());
+    }
+
+    @Tool(name = "update_document", description = """
+            Write (replace) the text content of an existing Google Doc.
+            The provided plain text will become the full content of the document.
+            Returns confirmation with the document ID and name.
+            """)
+    public String updateDocument(
+            @ToolParam(description = "The Google Drive file ID of the Google Doc to update", required = true) String fileId,
+            @ToolParam(description = "The new plain text content to write into the document", required = true) String content
+    ) throws IOException {
+        ByteArrayContent mediaContent = ByteArrayContent.fromString("text/plain", content);
+        File updated = drive.files().update(fileId, new File(), mediaContent)
+                .setFields("id, name")
+                .execute();
+
+        return "Updated document: id=%s, name=%s".formatted(updated.getId(), updated.getName());
+    }
+
+    @Tool(name = "update_spreadsheet", description = """
+            Write (replace) the content of an existing Google Sheet using CSV data.
+            The provided CSV text will become the full content of the spreadsheet.
+            Returns confirmation with the spreadsheet ID and name.
+            """)
+    public String updateSpreadsheet(
+            @ToolParam(description = "The Google Drive file ID of the Google Sheet to update", required = true) String fileId,
+            @ToolParam(description = "The new CSV content to write into the spreadsheet", required = true) String csvContent
+    ) throws IOException {
+        ByteArrayContent mediaContent = ByteArrayContent.fromString("text/csv", csvContent);
+        File updated = drive.files().update(fileId, new File(), mediaContent)
+                .setFields("id, name")
+                .execute();
+
+        return "Updated spreadsheet: id=%s, name=%s".formatted(updated.getId(), updated.getName());
     }
 
     // --- Helpers ---

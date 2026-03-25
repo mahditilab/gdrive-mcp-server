@@ -13,10 +13,14 @@ Exposes Google Drive operations as MCP tools, making your Google Drive accessibl
 | `list_files` | List files/folders, optionally filtered by parent folder |
 | `search_files` | Search by name or full-text content |
 | `get_file_info` | Get metadata for a specific file by ID |
-| `read_file` | Read content of a Google Doc, Sheet, or text file |
+| `read_file` | Read content of a Google Doc, Sheet, Slides, or text file |
 | `list_folders` | List all folders or sub-folders within a parent |
 | `create_document` | Create a new empty Google Doc |
+| `create_spreadsheet` | Create a new empty Google Sheet |
+| `create_presentation` | Create a new empty Google Slides presentation |
 | `create_folder` | Create a new folder |
+| `update_document` | Write (replace) the text content of an existing Google Doc |
+| `update_spreadsheet` | Write (replace) the content of an existing Google Sheet using CSV data |
 
 ---
 

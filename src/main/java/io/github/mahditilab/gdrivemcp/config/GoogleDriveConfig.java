@@ -8,6 +8,9 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.UserCredentials;
+import io.github.mahditilab.gdrivemcp.tools.GoogleDriveTools;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +41,13 @@ public class GoogleDriveConfig {
                 JacksonFactory.getDefaultInstance(),
                 new HttpCredentialsAdapter(scopedCredentials))
                 .setApplicationName(applicationName)
+                .build();
+    }
+
+    @Bean
+    public ToolCallbackProvider googleDriveToolCallbackProvider(GoogleDriveTools googleDriveTools) {
+        return MethodToolCallbackProvider.builder()
+                .toolObjects(googleDriveTools)
                 .build();
     }
 
