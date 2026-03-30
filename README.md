@@ -13,7 +13,7 @@ Exposes Google Drive operations as MCP tools, making your Google Drive accessibl
 | `list_files` | List files/folders, optionally filtered by parent folder |
 | `search_files` | Search by name or full-text content |
 | `get_file_info` | Get metadata for a specific file by ID |
-| `read_file` | Read content of a Google Doc, Sheet, Slides, or text file |
+| `read_file` | Read content of a Google Doc, Sheet, or text file; for Slides returns slide content + speaker notes |
 | `list_folders` | List all folders or sub-folders within a parent |
 | `create_document` | Create a new empty Google Doc |
 | `create_spreadsheet` | Create a new empty Google Sheet |
@@ -21,7 +21,7 @@ Exposes Google Drive operations as MCP tools, making your Google Drive accessibl
 | `create_folder` | Create a new folder |
 | `update_document` | Write (replace) the text content of an existing Google Doc |
 | `update_spreadsheet` | Write (replace) the content of an existing Google Sheet using CSV data |
-| `update_presentation` | Write (replace) the text content of an existing Google Slides presentation |
+| `update_presentation` | Write (replace) slides in a Google Slides presentation; supports `---` slide separators, and `[notes]` sections for speaker notes |
 
 ---
 
@@ -29,7 +29,7 @@ Exposes Google Drive operations as MCP tools, making your Google Drive accessibl
 
 - Java 21+
 - Maven 3.9+
-- A Google Cloud project with the **Google Drive API** enabled
+- A Google Cloud project with the **Google Drive API** and **Google Slides API** enabled
 - OAuth2 credentials stored in `~/.config/google-drive-mcp/`
 
 ### Getting OAuth2 credential files
@@ -160,7 +160,34 @@ Add to `~/.cursor/mcp.json`:
 
 ---
 
-## Project Structure
+## Presentation Text Format
+
+The `update_presentation` tool uses a plain text format to define slide content:
+
+- Slides are separated by a line containing only `---`
+- The **first line** of each block becomes the slide **title**
+- Remaining lines become the slide **body**
+- Add a `[notes]` line to start the **speaker notes** section for that slide
+
+```
+Title of Slide 1
+Body content for slide 1
+Second line of body
+[notes]
+Speaker notes for slide 1 go here
+
+---
+Title of Slide 2
+Body content for slide 2
+[notes]
+Speaker notes for slide 2
+```
+
+`read_file` on a Google Slides presentation returns content in the same format, including `[notes]` sections.
+
+---
+
+
 
 ```
 src/main/java/io/github/mahditilab/gdrivemcp/
@@ -181,4 +208,5 @@ src/main/resources/
 - **Spring Boot 3.4**
 - **Spring AI MCP Server Boot Starter** (`spring-ai-starter-mcp-server`) — STDIO transport
 - **Google Drive API v3** (`google-api-services-drive`)
+- **Google Slides API v1** (`google-api-services-slides`)
 - **Google Auth Library** (`google-auth-library-oauth2-http`)
