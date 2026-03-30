@@ -335,7 +335,7 @@ public class GoogleDriveTools {
             requests.clear();
         }
 
-        // Re-fetch presentation to get updated slide/shape IDs
+        // Re-fetch presentation to get updated slide/shape IDs and text content
         presentation = slides.presentations().get(fileId).execute();
         List<Page> updatedSlides = presentation.getSlides();
 
@@ -358,10 +358,16 @@ public class GoogleDriveTools {
                 };
 
                 if (text != null) {
-                    requests.add(new Request().setDeleteText(
-                            new DeleteTextRequest()
-                                    .setObjectId(shapeId)
-                                    .setTextRange(new Range().setType("ALL"))));
+                    // Only delete existing text if the shape actually has content
+                    boolean hasText = element.getShape().getText() != null
+                            && element.getShape().getText().getTextElements() != null
+                            && !element.getShape().getText().getTextElements().isEmpty();
+                    if (hasText) {
+                        requests.add(new Request().setDeleteText(
+                                new DeleteTextRequest()
+                                        .setObjectId(shapeId)
+                                        .setTextRange(new Range().setType("ALL"))));
+                    }
                     if (!text.isEmpty()) {
                         requests.add(new Request().setInsertText(
                                 new InsertTextRequest()
