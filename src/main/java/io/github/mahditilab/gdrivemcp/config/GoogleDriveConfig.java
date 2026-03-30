@@ -6,6 +6,8 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
+import com.google.api.services.slides.v1.Slides;
+import com.google.api.services.slides.v1.SlidesScopes;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.UserCredentials;
 import io.github.mahditilab.gdrivemcp.tools.GoogleDriveTools;
@@ -33,10 +35,22 @@ public class GoogleDriveConfig {
     @Bean
     public Drive googleDrive() throws GeneralSecurityException, IOException {
         var credentials = loadCredentialsFromTokensFile(Path.of(tokensPath));
-
-        var scopedCredentials = credentials.createScoped(List.of(DriveScopes.DRIVE));
+        var scopedCredentials = credentials.createScoped(List.of(DriveScopes.DRIVE, SlidesScopes.PRESENTATIONS));
 
         return new Drive.Builder(
+                GoogleNetHttpTransport.newTrustedTransport(),
+                JacksonFactory.getDefaultInstance(),
+                new HttpCredentialsAdapter(scopedCredentials))
+                .setApplicationName(applicationName)
+                .build();
+    }
+
+    @Bean
+    public Slides googleSlides() throws GeneralSecurityException, IOException {
+        var credentials = loadCredentialsFromTokensFile(Path.of(tokensPath));
+        var scopedCredentials = credentials.createScoped(List.of(DriveScopes.DRIVE, SlidesScopes.PRESENTATIONS));
+
+        return new Slides.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 JacksonFactory.getDefaultInstance(),
                 new HttpCredentialsAdapter(scopedCredentials))

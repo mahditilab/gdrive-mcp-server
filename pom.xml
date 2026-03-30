@@ -53,6 +53,19 @@
             </exclusions>
         </dependency>
 
+        <!-- Google Slides API -->
+        <dependency>
+            <groupId>com.google.apis</groupId>
+            <artifactId>google-api-services-slides</artifactId>
+            <version>v1-rev20250401-2.0.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <!-- Google Auth -->
         <dependency>
             <groupId>com.google.auth</groupId>

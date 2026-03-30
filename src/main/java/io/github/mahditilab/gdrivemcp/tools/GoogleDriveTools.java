@@ -4,13 +4,17 @@ import com.google.api.client.http.ByteArrayContent;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
+import com.google.api.services.slides.v1.Slides;
+import com.google.api.services.slides.v1.model.*;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -23,9 +27,11 @@ public class GoogleDriveTools {
     private static final String FOLDER_MIME       = "application/vnd.google-apps.folder";
 
     private final Drive drive;
+    private final Slides slides;
 
-    public GoogleDriveTools(Drive drive) {
+    public GoogleDriveTools(Drive drive, Slides slides) {
         this.drive = drive;
+        this.slides = slides;
     }
 
     @Tool(name = "list_files", description = """
@@ -269,18 +275,111 @@ public class GoogleDriveTools {
     @Tool(name = "update_presentation", description = """
             Write (replace) the text content of an existing Google Slides presentation.
             The provided plain text will become the full content of the presentation.
+            Slides are separated by lines containing only "---".
+            The first line of each slide becomes the title; remaining lines become the body.
             Returns confirmation with the presentation ID and name.
             """)
     public String updatePresentation(
             @ToolParam(description = "The Google Drive file ID of the Google Slides presentation to update", required = true) String fileId,
-            @ToolParam(description = "The new plain text content to write into the presentation", required = true) String content
+            @ToolParam(description = "The new plain text content. Separate slides with lines containing only '---'. First line of each slide is the title, rest is body.", required = true) String content
     ) throws IOException {
-        ByteArrayContent mediaContent = ByteArrayContent.fromString("text/plain", content);
-        File updated = drive.files().update(fileId, new File(), mediaContent)
-                .setFields("id, name")
-                .execute();
+        Presentation presentation = slides.presentations().get(fileId).execute();
+        List<Request> requests = new ArrayList<>();
 
-        return "Updated presentation: id=%s, name=%s".formatted(updated.getId(), updated.getName());
+        // Delete all existing slides except the first (Slides API requires at least one slide)
+        List<Page> existingSlides = presentation.getSlides();
+        if (existingSlides != null && existingSlides.size() > 1) {
+            for (int i = existingSlides.size() - 1; i >= 1; i--) {
+                requests.add(new Request().setDeleteObject(
+                        new DeleteObjectRequest().setObjectId(existingSlides.get(i).getObjectId())));
+            }
+        }
+
+        // Parse content into slides (split on lines that are exactly "---")
+        String[] slideBlocks = content.split("(?m)^---$");
+        List<String[]> slideTexts = new ArrayList<>();
+        for (String block : slideBlocks) {
+            String trimmed = block.strip();
+            if (!trimmed.isEmpty()) {
+                slideTexts.add(trimmed.split("\n", 2));
+            }
+        }
+
+        if (slideTexts.isEmpty()) {
+            return "No content provided. Presentation was not updated.";
+        }
+
+        // Update the first existing slide
+        String firstSlideId = existingSlides != null && !existingSlides.isEmpty()
+                ? existingSlides.get(0).getObjectId() : null;
+        List<String> slideIds = new ArrayList<>();
+        if (firstSlideId != null) {
+            slideIds.add(firstSlideId);
+        }
+
+        // Create additional slides for remaining blocks
+        for (int i = 1; i < slideTexts.size(); i++) {
+            String newSlideId = "slide_" + UUID.randomUUID().toString().replace("-", "");
+            requests.add(new Request().setCreateSlide(
+                    new CreateSlideRequest()
+                            .setObjectId(newSlideId)
+                            .setInsertionIndex(i)
+                            .setSlideLayoutReference(new LayoutReference().setPredefinedLayout("TITLE_AND_BODY"))));
+            slideIds.add(newSlideId);
+        }
+
+        // Apply slide creation requests first
+        if (!requests.isEmpty()) {
+            slides.presentations().batchUpdate(fileId,
+                    new BatchUpdatePresentationRequest().setRequests(requests)).execute();
+            requests.clear();
+        }
+
+        // Re-fetch presentation to get updated slide/shape IDs
+        presentation = slides.presentations().get(fileId).execute();
+        List<Page> updatedSlides = presentation.getSlides();
+
+        // Populate each slide's title and body
+        for (int i = 0; i < Math.min(slideTexts.size(), updatedSlides.size()); i++) {
+            Page slide = updatedSlides.get(i);
+            String[] parts = slideTexts.get(i);
+            String titleText = parts[0].strip();
+            String bodyText  = parts.length > 1 ? parts[1].strip() : "";
+
+            for (PageElement element : slide.getPageElements()) {
+                if (element.getShape() == null || element.getShape().getPlaceholder() == null) continue;
+                String pType = element.getShape().getPlaceholder().getType();
+                String shapeId = element.getObjectId();
+
+                String text = switch (pType) {
+                    case "TITLE", "CENTERED_TITLE" -> titleText;
+                    case "BODY", "SUBTITLE" -> bodyText;
+                    default -> null;
+                };
+
+                if (text != null) {
+                    requests.add(new Request().setDeleteText(
+                            new DeleteTextRequest()
+                                    .setObjectId(shapeId)
+                                    .setTextRange(new Range().setType("ALL"))));
+                    if (!text.isEmpty()) {
+                        requests.add(new Request().setInsertText(
+                                new InsertTextRequest()
+                                        .setObjectId(shapeId)
+                                        .setInsertionIndex(0)
+                                        .setText(text)));
+                    }
+                }
+            }
+        }
+
+        if (!requests.isEmpty()) {
+            slides.presentations().batchUpdate(fileId,
+                    new BatchUpdatePresentationRequest().setRequests(requests)).execute();
+        }
+
+        return "Updated presentation: id=%s, name=%s, slides=%d"
+                .formatted(fileId, presentation.getTitle(), slideTexts.size());
     }
 
     // --- Helpers ---
